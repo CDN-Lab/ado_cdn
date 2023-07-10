@@ -5,7 +5,7 @@ import math
 from scipy.stats import bernoulli
 # expit(x) = 1/(1+exp(-x))
 from scipy.special import expit as inv_logit
-
+from scipy.special import logsumexp
 
 def set_grids():
 
@@ -128,34 +128,60 @@ def get_LL(choice,p_choose_reward):
     return LL
  """
 
+# Compute log_likelihood, entropy given the three design sets: choice_set, param_set, response_set
+def compute_log_lik_ent(choice_set,param_set,response_set):
+    lik_model = np.exp(populate_log_lik(choice_set,param_set,response_set))
+    noise_ratio = 1e-7
+    log_lik = np.log((1 - 2 * noise_ratio) * lik_model + noise_ratio)
+
+    # dpy is design, parameters, output/response
+    # notation dpy,dpy-> dp indicates summing along y, axis=2 from (0,1,2)
+    ent = -1 * np.einsum('dpy,dpy->dp', np.exp(log_lik), log_lik)
+    return log_lik,ent
+
+# Compute Mutual Information, given log_likelihood, entropy, log_posterior
+def compute_mutual_info(log_lik,ent,log_post):
+    marg_log_lik = logsumexp(log_lik + log_post.reshape(1, -1, 1), axis=1)
+    ent_marg = -1 * np.einsum('dy,dy->d', np.exp(marg_log_lik), marg_log_lik)
+    post = np.exp(log_post)
+    ent_cond = np.einsum('p,dp->d', post, ent)
+    mutual_info = ent_marg - ent_cond
+    return mutual_info
+
+
 grid_design,grid_param,grid_response = set_grids()
 
 choice_set = make_grid(grid_design)
 param_set = make_grid(grid_param)
 response_set = make_grid(grid_response)
 
-lik_model = np.exp(populate_log_lik(choice_set,param_set,response_set))
-noise_ratio = 1e-7
-log_lik = np.log((1 - 2 * noise_ratio) * lik_model + noise_ratio)
-
-# dpy is design, parameters, output/response
-# notation dpy,dpy-> dp indicates summing along y, axis=2 from (0,1,2)
-entropy = -1 * np.einsum('dpy,dpy->dp', np.exp(log_lik), log_lik)
+log_lik,ent = compute_log_lik_ent(choice_set,param_set,response_set)
 
 # this should be a default when there is no belief that any set should be preferred... i.e., all parameters are equally likely
 n_p = param_set.shape[0]
 log_prior = np.log(np.ones(n_p, dtype=np.float32) / n_p)
 
+# this only for initialization, this needs to be updated when we go through the response, update sequence ... 
+log_post = log_prior
 
 '''
 By accessing :code:`mutual_info` once, the engine computes log_lik,
 marg_log_lik, ent, ent_marg, ent_cond, and mutual_info in a chain.
 '''
 
+mutual_info = compute_mutual_info(log_lik,ent,log_post)
+print(mutual_info.shape)
+print(mutual_info)
 
 
+# GET_DESIGN based on maximum Mutual information
 
+idx_design = np.argmax(mutual_info)
+print(idx_design)
+cur_design = choice_set.iloc[idx_design].to_dict()
+print(cur_design)
 
+# UPDATE given a new response
 
 
 
