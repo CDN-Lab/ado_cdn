@@ -81,8 +81,8 @@ def compute_log_lik(row_c,row_p,row_r):
     iSV_reward = SV_discount(vr,tr,kappa=kappa,alpha=1)
     # print(gamma,iSV_null,iSV_reward,-gamma*(iSV_null - iSV_reward))
     p_choose_reward = prob_softmax(iSV_reward,iSV_null,gamma=gamma)
-    LL = get_LL(choice,p_choose_reward)
-    return LL
+    # LL = get_LL(choice,p_choose_reward)
+    return bernoulli.logpmf(choice, p_choose_reward)
 
 def SV_discount(value,delay,kappa=0.005,alpha=1.0):
     # SV = (value**alpha)/(1+kappa*delay)
@@ -97,32 +97,36 @@ def prob_softmax(SV1,SV0,gamma=0.5):
         p = inv_logit(gamma*(SV1-SV0))
         # p = 1 / (1 + math.exp(-gamma*(SV1 - SV0)))
     except OverflowError:
+        print('We got OverflowError!')
+        # It seems that now that we are using inv_logit() we are not getting OverflowError from p formula used before
         p = 0
     return p
 
+""" 
+# extraneous function, using built-in functions deals with the special nan, -inf cases, RuntimeWarning
 def get_LL(choice,p_choose_reward):
     # eps = np.finfo(float).eps
     # smallest value LL can take
-    LL_floor = np.log(1e-7)
     try:
-        LL = (choice==1)*np.log(p_choose_reward) + ((choice==0))*np.log(1-p_choose_reward)
-        LL_bernie = bernoulli.logpmf(choice, p_choose_reward)
-        print('LL is {} and bernie is {}'.format(LL,LL_bernie))
-
-        if math.isnan(LL):
-            # print('log_lik is NaN with (choice,prob):({},{})'.format(choice,p_choose_reward))
-            LL = LL_floor
-        elif LL == float("-inf"):
-            # print('log_lik is -inf with (choice,prob):({},{})'.format(choice,p_choose_reward)) 
-            LL = LL_floor
-        elif LL < LL_floor:
-            # print('We got small LL: {}'.format(LL))
-            LL = LL_floor
+        # IDM_model method for calculating log-likelihood... possible we should change this
+        # LL = (choice==1)*np.log(p_choose_reward) + ((choice==0))*np.log(1-p_choose_reward)
+        LL = bernoulli.logpmf(choice, p_choose_reward)
+        # we will deal with these cases when we return and do the np.log(np.exp()) trick
+        # if math.isnan(LL):
+        #     # print('log_lik is NaN with (choice,prob):({},{})'.format(choice,p_choose_reward))
+        #     LL = LL_floor
+        # elif LL == float("-inf"):
+        #     # print('log_lik is -inf with (choice,prob):({},{})'.format(choice,p_choose_reward)) 
+        #     LL = LL_floor
+        # elif LL < LL_floor:
+        #     # print('We got small LL: {}'.format(LL))
+        #     LL = LL_floor
     except RuntimeWarning:
+        # It seems that now that we are using bernoulli.logpmf() we are not getting RuntimeWarning from LL formula used before
         print('We got some RunTimeWarning up in here?')
-        LL = LL_floor
+        # LL = LL_floor
     return LL
-
+ """
 
 grid_design,grid_param,grid_response = set_grids()
 
@@ -132,6 +136,7 @@ response_set = make_grid(grid_response)
 
 log_lik = populate_log_lik(choice_set,param_set,response_set)
 
+LL_floor = np.log(1e-7)
 
 print(log_lik[0,:,0].shape)
 # print(log_lik[0,:,0])
