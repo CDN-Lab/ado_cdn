@@ -72,6 +72,7 @@ def populate_log_lik(choice_set,param_set,response_set):
                 log_lik[i_c,i_p,i_r] = compute_log_lik(row_c,row_p,row_r)
     return log_lik
 
+# this is equivalent to compute() in ADO, defined in each Model class: ModelHyp(Model) in dd.py
 def compute_log_lik(row_c,row_p,row_r):
     tn,tr,vn,vr = row_c.values
     kappa,gamma = row_p.values
@@ -79,18 +80,18 @@ def compute_log_lik(row_c,row_p,row_r):
 
     iSV_null = SV_discount(vn,tn,kappa=kappa,alpha=1)
     iSV_reward = SV_discount(vr,tr,kappa=kappa,alpha=1)
-    # print(gamma,iSV_null,iSV_reward,-gamma*(iSV_null - iSV_reward))
-    p_choose_reward = prob_softmax(iSV_reward,iSV_null,gamma=gamma)
-    # LL = get_LL(choice,p_choose_reward)
+    p_choose_reward = inv_logit(gamma*(iSV_reward-iSV_null))
     return bernoulli.logpmf(choice, p_choose_reward)
 
 def SV_discount(value,delay,kappa=0.005,alpha=1.0):
-    # SV = (value**alpha)/(1+kappa*delay)
     def discount(delay):
         return np.divide(1, 1 + kappa * delay)
     SV = (value**alpha) * discount(delay)
     return SV
 
+
+""" 
+# extraneous function, using built-in functions deals with the special nan, -inf cases, OverflowError
 def prob_softmax(SV1,SV0,gamma=0.5):
     # compute probability using softmax function, return 0 if OverlowError is thrown
     try: 
@@ -102,7 +103,6 @@ def prob_softmax(SV1,SV0,gamma=0.5):
         p = 0
     return p
 
-""" 
 # extraneous function, using built-in functions deals with the special nan, -inf cases, RuntimeWarning
 def get_LL(choice,p_choose_reward):
     # eps = np.finfo(float).eps
@@ -134,11 +134,34 @@ choice_set = make_grid(grid_design)
 param_set = make_grid(grid_param)
 response_set = make_grid(grid_response)
 
-log_lik = populate_log_lik(choice_set,param_set,response_set)
+lik_model = np.exp(populate_log_lik(choice_set,param_set,response_set))
+noise_ratio = 1e-7
+log_lik = np.log((1 - 2 * noise_ratio) * lik_model + noise_ratio)
 
-LL_floor = np.log(1e-7)
+# dpy is design, parameters, output/response
+# notation dpy,dpy-> dp indicates summing along y, axis=2 from (0,1,2)
+entropy = -1 * np.einsum('dpy,dpy->dp', np.exp(log_lik), log_lik)
 
-print(log_lik[0,:,0].shape)
+# this should be a default when there is no belief that any set should be preferred... i.e., all parameters are equally likely
+n_p = param_set.shape[0]
+log_prior = np.log(np.ones(n_p, dtype=np.float32) / n_p)
+
+
+'''
+By accessing :code:`mutual_info` once, the engine computes log_lik,
+marg_log_lik, ent, ent_marg, ent_cond, and mutual_info in a chain.
+'''
+
+
+
+
+
+
+
+
+
+
+
 # print(log_lik[0,:,0])
 # print(np.min(np.min(log_lik)))
 # print(np.log(np.finfo(float).eps))
