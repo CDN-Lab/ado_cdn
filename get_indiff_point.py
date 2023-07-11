@@ -7,34 +7,51 @@ from scipy.stats import bernoulli
 from scipy.special import expit as inv_logit
 from scipy.special import logsumexp
 
-def set_grids():
 
+def ask_for_response(design):
+    response = input('Please choose: >>>(0) {} in {} days<<< OR >>>(1) {} in {} days<<<'.format(design['value_null'],design['time_null'],design['value_reward'],design['time_reward']))
+    response = int(response)
+    if response in [0,1]:
+        pass
+    else:
+        print('ERROR, you selected {}, response needs to be 0 or 1'.format(response))
+        print('Exiting now, try again')
+        exit
+    return response
+
+
+def get_simulated_response(design):
+    # Calculate the probability to choose a variable option
+    t_ss, t_ll, r_ss, r_ll = (
+        design['t_ss'], design['t_ll'],
+        design['r_ss'], design['r_ll']
+    )
+    k, tau = PARAM_TRUE['k'], PARAM_TRUE['tau']
+    
+    u_ss = r_ss * (1. / (1 + k * t_ss))
+    u_ll = r_ll * (1. / (1 + k * t_ll))
+    p_obs = 1. / (1 + np.exp(-tau * (u_ll - u_ss)))
+
+    # Randomly sample a binary choice response from Bernoulli distribution
+    return bernoulli.rvs(p_obs)
+
+
+def set_grids():
     grid_design = {
-        # [Now]
         'time_null': [0,1],
-        # [3 days, 5 days, 1 week, 2 weeks, 3 weeks,
-        #  1 month, 6 weeks, 2 months, 10 weeks, 3 months,
-        #  4 months, 5 months, 6 months, 1 year, 2 years,
-        #  3 years, 5 years, 10 years] in a weekly unit
         'time_reward': [0.43, 0.714, 1, 2, 3,
                 # 4.3, 6.44, 8.6, 10.8, 12.9,
                 # 17.2, 21.5, 26, 52, 104,
                 156, 260, 520],
-        # [$12.5, $25, ..., $775, $787.5]
-        # 'r_ss': np.arange(12.5, 800, 12.5),
-        # 'r_ss': [i*12.5 for i in range(1,64)],
         'value_null': [i*12.5 for i in range(1,4)],
-        # [$800]
         'value_reward': [800]
     }
-
     grid_param = {
         # 50 points on [10^-5, ..., 1] in a log scale
         'kappa': np.logspace(-5, 0, 50, base=10),
         # 10 points on (0, 5] in a linear scale
         'gamma': np.linspace(0, 5, 11)[1:]
     }
-
     grid_response = {
         'choice': [0, 1]
     }
@@ -148,6 +165,76 @@ def compute_mutual_info(log_lik,ent,log_post):
     mutual_info = ent_marg - ent_cond
     return mutual_info
 
+def get_nearest_grid_index(design, design_set) -> int:
+    """
+    Find the index of the best matching row vector to the given vector.
+    """
+    # ds or designs is the grid_matrix precomputed in step0
+    ds = design_set
+    d = design.reshape(1, -1)
+    # compute square of difference between d and each element of ds, 1134 by 4
+    # a = np.square(ds - d)
+    # sum across four elements to make it 1134 by 1
+    # b = a.sum(-1)
+    # return index that is smallest
+    # c = b.argsort()[0]
+    return np.square(ds - d).sum(-1).argsort()[0]
+
+
+def update_mutual_info(choice_set,response_set,cur_design,response,log_lik,ent,log_post):
+    # loop next three lines if there are multiple responses/designs to iterate through
+    i_d = get_nearest_grid_index(cur_design.values, choice_set.values)
+    i_y = get_nearest_grid_index(response.values, response_set.values)
+    log_post = log_post + log_lik[i_d, :, i_y]
+
+    log_post = log_post - logsumexp(log_post)
+
+    mutual_info = compute_mutual_info(log_lik,ent,log_post)
+    return mutual_info,log_post
+
+
+def get_post_mean(post,param_set):
+    """
+    A vector of estimated means for the posterior distribution.
+    Its length is ``num_params``.
+    """
+    return pd.Series(np.dot(post, param_set))
+
+# def post_cov(self) -> np.ndarray:
+#     """
+#     An estimated covariance matrix for the posterior distribution.
+#     Its shape is ``(num_grids, num_params)``.
+#     """
+#     # shape: (N_grids, N_param)
+#     d = self.grid_param.values - self.post_mean.values
+#     return np.dot(d.T, d * self.post.reshape(-1, 1))
+
+# def post_sd(self) -> vector_like:
+#     """
+#     A vector of estimated standard deviations for the posterior
+#     distribution. Its length is ``num_params``.
+#     """
+#     return pd.Series(np.sqrt(np.diag(self.post_cov)),
+#                         index=self.model.params,
+#                         name='Posterior SD')
+
+
+
+# number of trials
+N_TRIAL = 20
+
+# 1 week, 2 weeks, 1 month, 6 months, 1 year, 2 years, 10 years
+D_CAND = [1, 2, 4.3, 26, 52, 104, 520]
+
+# DELTA_R_SS for the staircase method:
+# The amount of changes on R_SS every 6 trials.
+DELTA_R_SS = [400, 200, 100, 50, 25, 12.5]
+
+# True parameter values to simulate responses
+# after we get this to work, we can select from prior distribution
+PARAM_TRUE = {'k': 0.12, 'tau': 1.5}
+
+
 
 grid_design,grid_param,grid_response = set_grids()
 
@@ -169,23 +256,48 @@ By accessing :code:`mutual_info` once, the engine computes log_lik,
 marg_log_lik, ent, ent_marg, ent_cond, and mutual_info in a chain.
 '''
 
+# initialize
 mutual_info = compute_mutual_info(log_lik,ent,log_post)
-print(mutual_info.shape)
-print(mutual_info)
-
-
-# GET_DESIGN based on maximum Mutual information
-
-idx_design = np.argmax(mutual_info)
-print(idx_design)
-cur_design = choice_set.iloc[idx_design].to_dict()
-print(cur_design)
-
-# UPDATE given a new response
 
 
 
+# Make an empty DataFrame to store data
+columns = ['trial', 'response', 'mean_k', 'mean_tau', 'sd_k', 'sd_tau','t_ss','t_ll','r_ss','r_ll']
+df_simul = pd.DataFrame(None, columns=columns)
 
+
+for i in range(N_TRIAL):
+
+    # GET_DESIGN based on maximum Mutual information
+
+    idx_design = np.argmax(mutual_info)
+    print(idx_design)
+    cur_design = choice_set.iloc[idx_design].to_dict()
+    print(cur_design)
+
+    # get new response
+
+    # Experiment
+    cur_response = ask_for_response(cur_design)
+
+    # UPDATE MI given a response
+    mutual_info,log_post = update_mutual_info(choice_set,response_set,cur_design,cur_response,log_lik,ent,log_post)
+    post_mean = get_post_mean(np.exp(log_post),param_set)
+    post_sd = [0,0]
+    # Save the information for updated posteriors
+    dict_app = {
+        'trial': i + 1,
+        'response': cur_response,
+        'mean_k': post_mean[0],
+        'mean_tau': post_mean[1],
+        'sd_k': post_sd[0],
+        'sd_tau': post_sd[1],
+    }
+    dict_app.update(cur_design)
+    df_app = pd.DataFrame(dict_app,index=[0])
+    df_simul = pd.concat([df_simul,df_app],ignore_index=True)
+
+print(df_simul)
 
 
 # print(log_lik[0,:,0])
