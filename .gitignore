@@ -1,0 +1,4 @@
+# ignore the file literally named .DS_Store
+.DS_Store
+__pycache__
+

@@ -1,11 +1,53 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+--------------------------------------------------------------------------------------
+
+### Use adaptive design optimization (ADO) to compute the indifference point ###
+
+This script runs the confidence delayed discounting (CDD) task form the Introspection 
+and decision-making (IDM) project. After the user chooses between two values, the
+script updates and a new design or choice is presented. Each update gets closer to the
+user's indifference point, where it is more difficult for the user to make a choice.
+Running this script for 15-20 trials should get to the indifference point.
+
+Inputs: 
+    selection by user of preference for money now or money later (CDD task).
+
+Outputs: 
+  	indifference-point .csv file: the scripts saves a user-specific behavior 
+        spreadsheet that captures the choices presented, the response made by the user,
+        and the model parameters.
+
+Usage: $ python get_indiff_point.py
+
+--------------------------------------------------------------------------------------
+"""
+
+# Built-in/Generic Imports
+import sys
+
+# Libs
 import numpy as np
 import pandas as pd
-import os,sys
-import math
 from scipy.stats import bernoulli
-# expit(x) = 1/(1+exp(-x))
 from scipy.special import expit as inv_logit
 from scipy.special import logsumexp
+
+# Own modules
+from get_distributions import get_post_mean
+
+
+__author__ = 'Ricardo Pizarro'
+__copyright__ = 'Copyright 2023, Introspection and decision-making (IDM) project'
+__credits__ = ['Ricardo Pizarro, Silvia Lopez-Guzman']
+__license__ = 'ADO-CDN 1.0'
+__version__ = '0.1.0'
+__maintainer__ = 'Ricardo Pizarro'
+__email__ = 'ricardo.pizarro@nih.gov, silvia.lopezguzman@nih.gov'
+__status__ = 'Dev'
+
 
 
 ### Getting a response entered manually in ask_for_response(design) or simulated in get_simulated_response(design) ###
@@ -146,12 +188,7 @@ def update_mutual_info(choice_set,response_set,cur_design,response,log_lik,ent,l
     return mutual_info,log_post
 
 
-def get_post_mean(post,param_set):
-    """
-    A vector of estimated means for the posterior distribution.
-    Its length is ``num_params``.
-    """
-    return pd.Series(np.dot(post, param_set))
+
 
 # def post_cov(self) -> np.ndarray:
 #     """
