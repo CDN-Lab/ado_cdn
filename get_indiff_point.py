@@ -23,8 +23,8 @@ def ask_for_response(design):
 def get_simulated_response(design):
     # Calculate the probability to choose a variable option
     t_ss, t_ll, r_ss, r_ll = (
-        design['t_ss'], design['t_ll'],
-        design['r_ss'], design['r_ll']
+        design['time_null'], design['time_reward'],
+        design['value_null'], design['value_reward']
     )
     k, tau = PARAM_TRUE['k'], PARAM_TRUE['tau']
     
@@ -38,12 +38,12 @@ def get_simulated_response(design):
 
 def set_grids():
     grid_design = {
-        'time_null': [0,1],
+        'time_null': [0],
         'time_reward': [0.43, 0.714, 1, 2, 3,
-                # 4.3, 6.44, 8.6, 10.8, 12.9,
-                # 17.2, 21.5, 26, 52, 104,
+                4.3, 6.44, 8.6, 10.8, 12.9,
+                17.2, 21.5, 26, 52, 104,
                 156, 260, 520],
-        'value_null': [i*12.5 for i in range(1,4)],
+        'value_null': [i*12.5 for i in range(1,64)],
         'value_reward': [800]
     }
     grid_param = {
@@ -169,22 +169,18 @@ def get_nearest_grid_index(design, design_set) -> int:
     """
     Find the index of the best matching row vector to the given vector.
     """
-    # ds or designs is the grid_matrix precomputed in step0
     ds = design_set
     d = design.reshape(1, -1)
-    # compute square of difference between d and each element of ds, 1134 by 4
-    # a = np.square(ds - d)
-    # sum across four elements to make it 1134 by 1
-    # b = a.sum(-1)
-    # return index that is smallest
-    # c = b.argsort()[0]
     return np.square(ds - d).sum(-1).argsort()[0]
 
 
 def update_mutual_info(choice_set,response_set,cur_design,response,log_lik,ent,log_post):
+    # in ADOpy they do some data_sort/prep to shape data into pandas series, we do this for now
+    design_vals = np.fromiter(cur_design.values(), dtype=float)
+    response_vals = np.array(response)
     # loop next three lines if there are multiple responses/designs to iterate through
-    i_d = get_nearest_grid_index(cur_design.values, choice_set.values)
-    i_y = get_nearest_grid_index(response.values, response_set.values)
+    i_d = get_nearest_grid_index(design_vals, choice_set.values)
+    i_y = get_nearest_grid_index(response_vals, response_set.values)
     log_post = log_post + log_lik[i_d, :, i_y]
 
     log_post = log_post - logsumexp(log_post)
@@ -262,7 +258,7 @@ mutual_info = compute_mutual_info(log_lik,ent,log_post)
 
 
 # Make an empty DataFrame to store data
-columns = ['trial', 'response', 'mean_k', 'mean_tau', 'sd_k', 'sd_tau','t_ss','t_ll','r_ss','r_ll']
+columns = ['trial', 'response', 'mean_kappa', 'mean_gamma', 'sd_kappa', 'sd_gamma','time_null', 'time_reward', 'value_null', 'value_reward']
 df_simul = pd.DataFrame(None, columns=columns)
 
 
@@ -278,7 +274,8 @@ for i in range(N_TRIAL):
     # get new response
 
     # Experiment
-    cur_response = ask_for_response(cur_design)
+    # cur_response = ask_for_response(cur_design)
+    cur_response = get_simulated_response(cur_design)    
 
     # UPDATE MI given a response
     mutual_info,log_post = update_mutual_info(choice_set,response_set,cur_design,cur_response,log_lik,ent,log_post)
@@ -288,17 +285,16 @@ for i in range(N_TRIAL):
     dict_app = {
         'trial': i + 1,
         'response': cur_response,
-        'mean_k': post_mean[0],
-        'mean_tau': post_mean[1],
-        'sd_k': post_sd[0],
-        'sd_tau': post_sd[1],
+        'mean_kappa': post_mean[0],
+        'mean_gamma': post_mean[1],
+        'sd_kappa': post_sd[0],
+        'sd_gamma': post_sd[1],
     }
     dict_app.update(cur_design)
     df_app = pd.DataFrame(dict_app,index=[0])
     df_simul = pd.concat([df_simul,df_app],ignore_index=True)
 
 print(df_simul)
-
 
 # print(log_lik[0,:,0])
 # print(np.min(np.min(log_lik)))
