@@ -8,41 +8,40 @@ from scipy.special import expit as inv_logit
 from scipy.special import logsumexp
 
 
+### Getting a response entered manually in ask_for_response(design) or simulated in get_simulated_response(design) ###
+
 def ask_for_response(design):
-    response = input('Please choose: >>>(0) {} in {} days<<< OR >>>(1) {} in {} days<<<'.format(design['value_null'],design['time_null'],design['value_reward'],design['time_reward']))
+    response = input('Please choose: >>>(0) {} in {} days<<< OR >>>(1) {} in {} days<<<'
+                     .format(design['value_null'],design['time_null'],design['value_reward'],design['time_reward']))
     response = int(response)
     if response in [0,1]:
         pass
     else:
         print('ERROR, you selected {}, response needs to be 0 or 1'.format(response))
         print('Exiting now, try again')
-        exit
+        sys.exit()
     return response
-
 
 def get_simulated_response(design):
     # Calculate the probability to choose a variable option
-    t_ss, t_ll, r_ss, r_ll = (
-        design['time_null'], design['time_reward'],
-        design['value_null'], design['value_reward']
-    )
-    k, tau = PARAM_TRUE['k'], PARAM_TRUE['tau']
+    tn, tr, vn, vr = (design['time_null'], design['time_reward'],design['value_null'], design['value_reward'])
+    kappa, gamma = PARAM_TRUE['kappa'], PARAM_TRUE['gamma']
     
-    u_ss = r_ss * (1. / (1 + k * t_ss))
-    u_ll = r_ll * (1. / (1 + k * t_ll))
-    p_obs = 1. / (1 + np.exp(-tau * (u_ll - u_ss)))
+    SV_null = vn * (1. / (1 + kappa * tn))
+    SV_reward = vr * (1. / (1 + kappa * tr))
+    p_obs = 1. / (1 + np.exp(-gamma * (SV_reward - SV_null)))
 
     # Randomly sample a binary choice response from Bernoulli distribution
     return bernoulli.rvs(p_obs)
 
 
+### Defining the grids, and functions to make sets as dataframes: choice_set,param_set,response_set
+
 def set_grids():
     grid_design = {
         'time_null': [0],
-        'time_reward': [0.43, 0.714, 1, 2, 3,
-                4.3, 6.44, 8.6, 10.8, 12.9,
-                17.2, 21.5, 26, 52, 104,
-                156, 260, 520],
+        'time_reward': [0.43, 0.714, 1, 2, 3,4.3, 6.44, 8.6, 10.8, 12.9,
+                17.2, 21.5, 26, 52, 104,156, 260, 520],
         'value_null': [i*12.5 for i in range(1,64)],
         'value_reward': [800]
     }
@@ -56,7 +55,6 @@ def set_grids():
         'choice': [0, 1]
     }
     return grid_design,grid_param,grid_response
-
 
 def insert_var(grid=[],var_nb=0,list_var=[]):
     if not var_nb:
@@ -76,8 +74,8 @@ def make_grid(design):
     return grid_df
 
 
-def populate_log_lik(choice_set,param_set,response_set):
 
+def populate_log_lik(choice_set,param_set,response_set):
     n_c = choice_set.shape[0]
     n_p = param_set.shape[0]
     n_r = response_set.shape[0]
@@ -91,59 +89,17 @@ def populate_log_lik(choice_set,param_set,response_set):
 
 # this is equivalent to compute() in ADO, defined in each Model class: ModelHyp(Model) in dd.py
 def compute_log_lik(row_c,row_p,row_r):
+    def discount(delay=1):
+        return np.divide(1, 1 + kappa * delay)
     tn,tr,vn,vr = row_c.values
     kappa,gamma = row_p.values
+    alpha = 1
     choice = row_r.values[0]
 
-    iSV_null = SV_discount(vn,tn,kappa=kappa,alpha=1)
-    iSV_reward = SV_discount(vr,tr,kappa=kappa,alpha=1)
+    iSV_null = (vn**alpha) * discount(delay=tn)
+    iSV_reward = (vr**alpha) * discount(delay=tr)
     p_choose_reward = inv_logit(gamma*(iSV_reward-iSV_null))
     return bernoulli.logpmf(choice, p_choose_reward)
-
-def SV_discount(value,delay,kappa=0.005,alpha=1.0):
-    def discount(delay):
-        return np.divide(1, 1 + kappa * delay)
-    SV = (value**alpha) * discount(delay)
-    return SV
-
-
-""" 
-# extraneous function, using built-in functions deals with the special nan, -inf cases, OverflowError
-def prob_softmax(SV1,SV0,gamma=0.5):
-    # compute probability using softmax function, return 0 if OverlowError is thrown
-    try: 
-        p = inv_logit(gamma*(SV1-SV0))
-        # p = 1 / (1 + math.exp(-gamma*(SV1 - SV0)))
-    except OverflowError:
-        print('We got OverflowError!')
-        # It seems that now that we are using inv_logit() we are not getting OverflowError from p formula used before
-        p = 0
-    return p
-
-# extraneous function, using built-in functions deals with the special nan, -inf cases, RuntimeWarning
-def get_LL(choice,p_choose_reward):
-    # eps = np.finfo(float).eps
-    # smallest value LL can take
-    try:
-        # IDM_model method for calculating log-likelihood... possible we should change this
-        # LL = (choice==1)*np.log(p_choose_reward) + ((choice==0))*np.log(1-p_choose_reward)
-        LL = bernoulli.logpmf(choice, p_choose_reward)
-        # we will deal with these cases when we return and do the np.log(np.exp()) trick
-        # if math.isnan(LL):
-        #     # print('log_lik is NaN with (choice,prob):({},{})'.format(choice,p_choose_reward))
-        #     LL = LL_floor
-        # elif LL == float("-inf"):
-        #     # print('log_lik is -inf with (choice,prob):({},{})'.format(choice,p_choose_reward)) 
-        #     LL = LL_floor
-        # elif LL < LL_floor:
-        #     # print('We got small LL: {}'.format(LL))
-        #     LL = LL_floor
-    except RuntimeWarning:
-        # It seems that now that we are using bernoulli.logpmf() we are not getting RuntimeWarning from LL formula used before
-        print('We got some RunTimeWarning up in here?')
-        # LL = LL_floor
-    return LL
- """
 
 # Compute log_likelihood, entropy given the three design sets: choice_set, param_set, response_set
 def compute_log_lik_ent(choice_set,param_set,response_set):
@@ -165,26 +121,27 @@ def compute_mutual_info(log_lik,ent,log_post):
     mutual_info = ent_marg - ent_cond
     return mutual_info
 
-def get_nearest_grid_index(design, design_set) -> int:
-    """
-    Find the index of the best matching row vector to the given vector.
-    """
-    ds = design_set
-    d = design.reshape(1, -1)
-    return np.square(ds - d).sum(-1).argsort()[0]
-
-
+# This is essentially the engine.update where the mutual_info and log_posterior is updated after a response/choice is made
 def update_mutual_info(choice_set,response_set,cur_design,response,log_lik,ent,log_post):
+    # Find the index of the best matching row vector to the given vector.
+    def get_nearest_grid_index(design, design_set) -> int:
+        design = design.reshape(1, -1)
+        return np.square(design_set - design).sum(-1).argsort()[0]
     # in ADOpy they do some data_sort/prep to shape data into pandas series, we do this for now
     design_vals = np.fromiter(cur_design.values(), dtype=float)
     response_vals = np.array(response)
     # loop next three lines if there are multiple responses/designs to iterate through
     i_d = get_nearest_grid_index(design_vals, choice_set.values)
     i_y = get_nearest_grid_index(response_vals, response_set.values)
+    # add log_likelihood (not pdf) to the log_posterior
     log_post = log_post + log_lik[i_d, :, i_y]
 
+    # This seems to be a normalization so we can have a pdf for the log posterior
+    print(log_post)
+    print(logsumexp(log_post))
     log_post = log_post - logsumexp(log_post)
-
+    print(logsumexp(log_post))
+    print(log_post)
     mutual_info = compute_mutual_info(log_lik,ent,log_post)
     return mutual_info,log_post
 
@@ -216,19 +173,15 @@ def get_post_mean(post,param_set):
 
 
 
+### Global variables that can be accessed throughout the script ###
+
 # number of trials
-N_TRIAL = 20
-
-# 1 week, 2 weeks, 1 month, 6 months, 1 year, 2 years, 10 years
-D_CAND = [1, 2, 4.3, 26, 52, 104, 520]
-
-# DELTA_R_SS for the staircase method:
-# The amount of changes on R_SS every 6 trials.
-DELTA_R_SS = [400, 200, 100, 50, 25, 12.5]
+N_TRIAL = 2
 
 # True parameter values to simulate responses
 # after we get this to work, we can select from prior distribution
-PARAM_TRUE = {'k': 0.12, 'tau': 1.5}
+PARAM_TRUE = {'kappa': 0.12, 'gamma': 1.5}
+
 
 
 
