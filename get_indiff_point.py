@@ -190,7 +190,9 @@ for i in range(N_TRIAL):
     df_simul = pd.concat([df_simul,df_app],ignore_index=True)
 
 print(df_simul)
-
+fn = '/tmp/ADO_simulation.csv'
+print('Saving to : {}'.format(fn))
+df_simul.to_csv(fn)
 print('Time to complete step 1,2,3 : {} minutes'.format((time.time() - tStep123)/60.0))
 
 
