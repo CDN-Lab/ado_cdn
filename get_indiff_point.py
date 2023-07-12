@@ -27,6 +27,7 @@ Usage: $ python get_indiff_point.py
 
 # Built-in/Generic Imports
 import sys
+import time
 
 # Libs
 import numpy as np
@@ -118,9 +119,9 @@ def make_grid(design):
 ### Global variables that can be accessed throughout the script ###
 
 # number of trials
-N_TRIAL = 2
+N_TRIAL = 200
 # True parameter values to simulate responses, can select from prior distribution
-PARAM_TRUE = {'kappa': 0.12, 'gamma': 1.5}
+PARAM_TRUE = {'kappa': 0.2, 'gamma': 1.0}
 
 
 # Step 0, compute log_likelihood, entropy, assign log_prior to log_posterior
@@ -131,6 +132,8 @@ choice_set = make_grid(grid_design)
 param_set = make_grid(grid_param)
 response_set = make_grid(grid_response)
 
+tStep0 = time.time()
+
 log_lik,ent = get_LL_ent(choice_set,param_set,response_set)
 
 # this should be a default when there is no belief that any set should be preferred... i.e., all parameters are equally likely
@@ -140,9 +143,11 @@ log_prior = np.log(np.ones(n_p, dtype=np.float32) / n_p)
 # this only for initialization, this needs to be updated when we go through the response, update sequence ... 
 log_post = log_prior
 
+print('Time to complete step 0 : {} minutes'.format((time.time() - tStep0)/60.0))
 
 
 
+tStep123 = time.time()
 '''
 By accessing :code:`mutual_info` once, the engine computes log_lik,
 marg_log_lik, ent, ent_marg, ent_cond, and mutual_info in a chain.
@@ -186,5 +191,6 @@ for i in range(N_TRIAL):
 
 print(df_simul)
 
+print('Time to complete step 1,2,3 : {} minutes'.format((time.time() - tStep123)/60.0))
 
 
