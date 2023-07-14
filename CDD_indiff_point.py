@@ -20,7 +20,7 @@ Outputs:
         spreadsheet that captures the choices presented, the response made by the user,
         and the model parameters.
 
-Usage: $ python get_indiff_point.py
+Usage: $ python CDD_indiff_point.py
 
 --------------------------------------------------------------------------------------
 """
@@ -47,6 +47,13 @@ __maintainer__ = 'Ricardo Pizarro'
 __email__ = 'ricardo.pizarro@nih.gov, silvia.lopezguzman@nih.gov'
 __status__ = 'Dev'
 
+
+### Global variables that can be accessed throughout the script ###
+
+# number of trials
+N_TRIAL = 200
+# True parameter values to simulate responses, can select from prior distribution
+PARAM_TRUE = {'kappa': 0.2, 'gamma': 1.0}
 
 
 ### Getting a response entered manually in ask_for_response(design) or simulated in get_simulated_response(design) ###
@@ -114,85 +121,87 @@ def make_grid(design):
     grid_df = pd.DataFrame(grid,columns=labels)
     return grid_df
 
+def make_grids(gd,gp,gr):
+    return make_grid(gd),make_grid(gp),make_grid(gr)
+
+class Gridset(object):
+    choice = []
+    param = []
+    response = []
+
+def step0():
+    tStep0 = time.time()
+    grid_design,grid_param,grid_response = set_grids()
+    sets = Gridset()
+    sets.choice,sets.param,sets.response = make_grids(grid_design,grid_param,grid_response)
+    # choice_set,param_set,response_set = make_grids(grid_design,grid_param,grid_response)
+
+    log_lik,ent = get_LL_ent(sets.choice,sets.param,sets.response)
+
+    # this should be a default when there is no belief that any set should be preferred... i.e., all parameters are equally likely
+    n_p = sets.param.shape[0]
+    log_prior = np.log(np.ones(n_p, dtype=np.float32) / n_p)
+
+    # this only for initialization, this needs to be updated when we go through the response, update sequence ... 
+    log_post = log_prior
+    print('Time to complete step 0 : {} minutes'.format((time.time() - tStep0)/60.0))
+    return log_lik,ent,log_post,sets
+
+def step123(log_lik,ent,log_post,sets):
+    tStep123 = time.time()
+    '''
+    By accessing :code:`mutual_info` once, the engine computes log_lik,
+    marg_log_lik, ent, ent_marg, ent_cond, and mutual_info in a chain.
+    '''
+    # initialize
+    mutual_info = get_MI(log_lik,ent,log_post)
+
+    # Make an empty DataFrame to store data
+    columns = ['trial', 'response', 'mean_kappa', 'mean_gamma', 'sd_kappa', 'sd_gamma','time_null', 'time_reward', 'value_null', 'value_reward']
+    df_simul = pd.DataFrame(None, columns=columns)
+
+    for i in range(N_TRIAL):
+
+        # GET_DESIGN based on maximum Mutual information
+        idx_design = np.argmax(mutual_info)
+        cur_design = sets.choice.iloc[idx_design].to_dict()
+
+        # Experiment
+        # cur_response = ask_for_response(cur_design)
+        cur_response = get_simulated_response(cur_design)    
+
+        # UPDATE MI given a response
+        mutual_info,log_post = update_MI(sets.choice,sets.response,cur_design,cur_response,log_lik,ent,log_post)
+        post_mean = get_post_mean(np.exp(log_post),sets.param)
+        post_sd = get_post_sd(np.exp(log_post),sets.param)
+        # Save the information for updated posteriors
+        dict_app = {
+            'trial': i + 1,
+            'response': cur_response,
+            'mean_kappa': post_mean[0],
+            'mean_gamma': post_mean[1],
+            'sd_kappa': post_sd[0],
+            'sd_gamma': post_sd[1],
+        }
+        dict_app.update(cur_design)
+        df_app = pd.DataFrame(dict_app,index=[0])
+        df_simul = pd.concat([df_simul,df_app],ignore_index=True)
+
+    print(df_simul)
+    fn = '/tmp/ADO_simulation.csv'
+    print('Saving to : {}'.format(fn))
+    df_simul.to_csv(fn)
+    print('Time to complete step 1,2,3 : {} minutes'.format((time.time() - tStep123)/60.0))
 
 
-### Global variables that can be accessed throughout the script ###
+def main():
 
-# number of trials
-N_TRIAL = 200
-# True parameter values to simulate responses, can select from prior distribution
-PARAM_TRUE = {'kappa': 0.2, 'gamma': 1.0}
-
-
-# Step 0, compute log_likelihood, entropy, assign log_prior to log_posterior
-
-grid_design,grid_param,grid_response = set_grids()
-
-choice_set = make_grid(grid_design)
-param_set = make_grid(grid_param)
-response_set = make_grid(grid_response)
-
-tStep0 = time.time()
-
-log_lik,ent = get_LL_ent(choice_set,param_set,response_set)
-
-# this should be a default when there is no belief that any set should be preferred... i.e., all parameters are equally likely
-n_p = param_set.shape[0]
-log_prior = np.log(np.ones(n_p, dtype=np.float32) / n_p)
-
-# this only for initialization, this needs to be updated when we go through the response, update sequence ... 
-log_post = log_prior
-
-print('Time to complete step 0 : {} minutes'.format((time.time() - tStep0)/60.0))
+    # Step 0, compute log_likelihood, entropy, assign log_prior to log_posterior
+    log_lik,ent,log_post,sets = step0()
+    step123(log_lik,ent,log_post,sets)
 
 
 
-tStep123 = time.time()
-'''
-By accessing :code:`mutual_info` once, the engine computes log_lik,
-marg_log_lik, ent, ent_marg, ent_cond, and mutual_info in a chain.
-'''
-# initialize
-mutual_info = get_MI(log_lik,ent,log_post)
-
-
-
-# Make an empty DataFrame to store data
-columns = ['trial', 'response', 'mean_kappa', 'mean_gamma', 'sd_kappa', 'sd_gamma','time_null', 'time_reward', 'value_null', 'value_reward']
-df_simul = pd.DataFrame(None, columns=columns)
-
-
-for i in range(N_TRIAL):
-
-    # GET_DESIGN based on maximum Mutual information
-    idx_design = np.argmax(mutual_info)
-    cur_design = choice_set.iloc[idx_design].to_dict()
-
-    # Experiment
-    # cur_response = ask_for_response(cur_design)
-    cur_response = get_simulated_response(cur_design)    
-
-    # UPDATE MI given a response
-    mutual_info,log_post = update_MI(choice_set,response_set,cur_design,cur_response,log_lik,ent,log_post)
-    post_mean = get_post_mean(np.exp(log_post),param_set)
-    post_sd = get_post_sd(np.exp(log_post),param_set)
-    # Save the information for updated posteriors
-    dict_app = {
-        'trial': i + 1,
-        'response': cur_response,
-        'mean_kappa': post_mean[0],
-        'mean_gamma': post_mean[1],
-        'sd_kappa': post_sd[0],
-        'sd_gamma': post_sd[1],
-    }
-    dict_app.update(cur_design)
-    df_app = pd.DataFrame(dict_app,index=[0])
-    df_simul = pd.concat([df_simul,df_app],ignore_index=True)
-
-print(df_simul)
-fn = '/tmp/ADO_simulation.csv'
-print('Saving to : {}'.format(fn))
-df_simul.to_csv(fn)
-print('Time to complete step 1,2,3 : {} minutes'.format((time.time() - tStep123)/60.0))
-
-
+if __name__ == "__main__":
+	# main will be executed after running the script
+    main()
