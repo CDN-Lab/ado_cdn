@@ -36,6 +36,7 @@ def compute_log_lik(row_c,row_p,row_r):
     p_choose_reward = inv_logit(gamma*(iSV_reward-iSV_null))
     return bernoulli.logpmf(choice, p_choose_reward)
 
+
 # Compute log_likelihood, entropy given the three design sets: choice_set, param_set, response_set
 def get_LL_ent(choice_set,param_set,response_set):
     lik_model = np.exp(populate_log_lik(choice_set,param_set,response_set))
@@ -45,6 +46,7 @@ def get_LL_ent(choice_set,param_set,response_set):
     # dpy is design, parameters, output/response
     # notation dpy,dpy-> dp indicates summing along y, axis=2 from (0,1,2)
     ent = -1 * np.einsum('dpy,dpy->dp', np.exp(log_lik), log_lik)
+
     return log_lik,ent
 
 # Compute Mutual Information, given log_likelihood, entropy, log_posterior
@@ -55,6 +57,7 @@ def get_MI(log_lik,ent,log_post):
     ent_cond = np.einsum('p,dp->d', post, ent)
     mutual_info = ent_marg - ent_cond
     return mutual_info
+
 
 # This is essentially the engine.update where the mutual_info and log_posterior is updated after a response/choice is made
 def update_MI(choice_set,response_set,cur_design,response,log_lik,ent,log_post):
