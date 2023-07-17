@@ -26,13 +26,14 @@ Usage: $ python CDD_indiff_point.py
 """
 
 # Built-in/Generic Imports
-import sys
+import os,sys
 import time
 
 # Libs
 import numpy as np
 import pandas as pd
 from scipy.stats import bernoulli
+import pymc as pm
 
 # Own modules
 from get_distributions import get_LL_ent,get_MI,update_MI,get_post_mean,get_post_sd
@@ -53,7 +54,33 @@ __status__ = 'Dev'
 # number of trials
 N_TRIAL = 200
 # True parameter values to simulate responses, can select from prior distribution
+# PARAM_TRUE = get_true_param(default=False)
 PARAM_TRUE = {'kappa': 0.2, 'gamma': 1.0}
+
+def alpha_beta(m,v):
+    # use mean and variance to compute alpha and beta parameters for Beta distribution
+    a = ((1.0-m)/(v) - 1/m)*(m**2)
+    b = a*(1/m - 1.0)
+    return a,b
+
+def get_true_param(manual=True):
+    # True parameter values to simulate responses, can select from prior distribution
+    global PARAM_TRUE 
+    if manual:
+        PARAM_TRUE = {'kappa': 0.2, 'gamma': 1.0}
+    else:
+        save_dir = '/Volumes/UCDN/datasets/IDM/BH/csv'
+        fn = os.path.join(save_dir,'completely_pooled_model.csv')
+        pool_model = pd.read_csv(fn,index_col=0)
+        mkh,skh = pool_model.loc['kappa[0]','mean'],pool_model.loc['kappa[0]','sd']
+        mgh,sgh = pool_model.loc['gamma[0]','mean'],pool_model.loc['gamma[0]','sd']
+
+        k_alpha,k_beta = alpha_beta(mkh,skh**2)
+        g_alpha,g_beta = alpha_beta(mgh,sgh**2)
+
+        kappa = np.random.beta(k_alpha,k_beta)
+        gamma = np.random.beta(g_alpha,g_beta)
+        PARAM_TRUE = {'kappa': kappa, 'gamma': gamma}
 
 
 ### Getting a response entered manually in ask_for_response(design) or simulated in get_simulated_response(design) ###
@@ -87,11 +114,14 @@ def get_simulated_response(design):
 
 def set_grids():
     grid_design = {
+        # now: time_null = 0
         'time_null': [0],
-        'time_reward': [0.43, 0.714, 1, 2, 3,4.3, 6.44, 8.6, 10.8, 12.9,
-                17.2, 21.5, 26, 52, 104,156, 260, 520],
-        'value_null': [i*12.5 for i in range(1,64)],
-        'value_reward': [800]
+        # time to get reward (delay_wait)
+        'time_reward': [5, 10, 30, 60, 90, 150],
+        # immediate reward from experiment: $2, $10, $20 ... fixed to $10
+        'value_null': [10],
+        # reward amount set to vary according to experiment
+        'value_reward': [7, 14, 21, 30, 41, 50, 65]
     }
     grid_param = {
         # 50 points on [10^-5, ..., 1] in a log scale
@@ -129,18 +159,45 @@ class Gridset(object):
     param = []
     response = []
 
+def get_khat(sets):
+    vn = sets.choice['value_null'].unique()[0]
+    tr_vals = sets.choice['time_reward'].unique()
+    vr_vals = sets.choice['value_reward'].unique()
+    tr_mid = tr_vals[len(tr_vals)//2]
+    vr_mid = vr_vals[len(vr_vals)//2]
+    return (vr_mid/vn - 1.0) / (tr_mid)
+
+def set_to_logp(sets,k_hat):
+    param_mid = sets.param.iloc[(sets.param['kappa']-k_hat).abs().argsort()[:1]]
+    pmid_idx = param_mid.index.values.astype(int)[0]
+    n_p = sets.param.shape[0]
+    prior = np.zeros(n_p, dtype=np.float32)
+    prior[pmid_idx] = 1
+    noise_ratio = 1e-7
+    log_prior = np.log((1 - 2 * noise_ratio) * prior + noise_ratio)
+    return log_prior
+
+def get_prior(sets,default=True):
+    
+    # this should be a default when there is no belief that any set should be preferred... i.e., all parameters are equally likely
+    if default:
+        n_p = sets.param.shape[0]
+        return np.log(np.ones(n_p, dtype=np.float32) / n_p)
+    else:
+        k_hat = get_khat(sets)
+        return set_to_logp(sets,k_hat)
+
 def step0():
     tStep0 = time.time()
+    get_true_param(manual=False)
+    print(PARAM_TRUE)
     grid_design,grid_param,grid_response = set_grids()
     sets = Gridset()
     sets.choice,sets.param,sets.response = make_grids(grid_design,grid_param,grid_response)
     # choice_set,param_set,response_set = make_grids(grid_design,grid_param,grid_response)
 
     log_lik,ent = get_LL_ent(sets.choice,sets.param,sets.response)
-
-    # this should be a default when there is no belief that any set should be preferred... i.e., all parameters are equally likely
-    n_p = sets.param.shape[0]
-    log_prior = np.log(np.ones(n_p, dtype=np.float32) / n_p)
+    log_prior = get_prior(sets,default=False)
 
     # this only for initialization, this needs to be updated when we go through the response, update sequence ... 
     log_post = log_prior
