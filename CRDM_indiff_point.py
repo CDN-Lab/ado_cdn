@@ -6,21 +6,21 @@
 
 ### Use adaptive design optimization (ADO) to compute the indifference point ###
 
-This script runs the confidence delayed discounting (CDD) task form the Introspection 
+This script runs the confidence risky ambiguity (CRDM) task form the Introspection 
 and decision-making (IDM) project. After the user chooses between two values, the
 script updates and a new design or choice is presented. Each update gets closer to the
 user's indifference point, where it is more difficult for the user to make a choice.
 Running this script for 15-20 trials should get to the indifference point.
 
 Inputs: 
-    selection by user of preference for money now or money later (CDD task).
+    selection by user of preference for safe or lottery amount (CRDM task).
 
 Outputs: 
   	indifference-point .csv file: the scripts saves a user-specific behavior 
         spreadsheet that captures the choices presented, the response made by the user,
         and the model parameters.
 
-Usage: $ python CDD_indiff_point.py
+Usage: $ python CRDM_indiff_point.py
 
 --------------------------------------------------------------------------------------
 """
@@ -53,9 +53,9 @@ __status__ = 'Dev'
 
 # number of trials
 N_TRIAL = 200
-# True parameter values to simulate responses, can select from prior distribution
-# PARAM_TRUE = get_true_param(default=False)
-PARAM_TRUE = {'kappa': 0.2, 'gamma': 1.0}
+
+# True parameter values to simulate responses
+PARAM_TRUE = {'alpha': 0.67, 'beta': 0.66, 'gamma': 1.5}
 
 def alpha_beta(m,v):
     # use mean and variance to compute alpha and beta parameters for Beta distribution
@@ -67,7 +67,8 @@ def get_true_param(manual=True):
     # True parameter values to simulate responses, can select from prior distribution
     global PARAM_TRUE 
     if manual:
-        PARAM_TRUE = {'kappa': 0.2, 'gamma': 1.0}
+        PARAM_TRUE = {'alpha': 0.67, 'beta': 0.66, 'gamma': 1.5}
+""" 
     else:
         save_dir = '/Volumes/UCDN/datasets/IDM/BH/csv'
         fn = os.path.join(save_dir,'completely_pooled_model.csv')
@@ -81,7 +82,7 @@ def get_true_param(manual=True):
         kappa = np.random.beta(k_alpha,k_beta)
         gamma = np.random.beta(g_alpha,g_beta)
         PARAM_TRUE = {'kappa': kappa, 'gamma': gamma}
-
+ """
 
 ### Getting a response entered manually in ask_for_response(design) or simulated in get_simulated_response(design) ###
 
@@ -252,7 +253,6 @@ def step123(log_lik,ent,log_post,sets):
 
 
 def main():
-
     # Step 0, compute log_likelihood, entropy, assign log_prior to log_posterior
     log_lik,ent,log_post,sets = step0()
     step123(log_lik,ent,log_post,sets)
