@@ -18,19 +18,35 @@ def populate_log_lik(choice_set,param_set,response_set):
     n_p = param_set.shape[0]
     n_r = response_set.shape[0]
 
-    print(param_set)
-    print(choice_set)
-    sys.exit()
+    task = 'cdd'
+    if 'amb_level' in list(choice_set):
+        task='crdm'
 
     log_lik = np.zeros((n_c,n_p,n_r))
     for i_c,row_c in choice_set.iterrows():
         for i_p,row_p in param_set.iterrows():
             for i_r,row_r in response_set.iterrows():
-                log_lik[i_c,i_p,i_r] = compute_log_lik(row_c,row_p,row_r)
+                if task == 'cdd':
+                    log_lik[i_c,i_p,i_r] = compute_LL_cdd(row_c,row_p,row_r)
+                elif task == 'crdm':
+                    log_lik[i_c,i_p,i_r] = compute_LL_crdm(row_c,row_p,row_r)
     return log_lik
 
 # this is equivalent to compute() in ADO, defined in each Model class: ModelHyp(Model) in dd.py
-def compute_log_lik(row_c,row_p,row_r):
+def compute_LL_crdm(row_c,row_p,row_r):
+    def ambiguity(prob=0.5,ambig=0.0,beta=0.5):
+        return prob - beta*ambig/2
+    pn,pr,vn,vr,ambig = row_c.values
+    alpha,beta,gamma = row_p.values
+    choice = row_r.values[0]
+
+    iSV_null = (vn**alpha) * ambiguity(prob=pn,ambig=0.0,beta=beta)
+    iSV_reward = (vr**alpha) * ambiguity(prob=pr,ambig=ambig,beta=beta)
+    p_choose_reward = inv_logit(gamma*(iSV_reward-iSV_null))
+    return bernoulli.logpmf(choice, p_choose_reward)
+
+# this is equivalent to compute() in ADO, defined in each Model class: ModelHyp(Model) in dd.py
+def compute_LL_cdd(row_c,row_p,row_r):
     def discount(delay=1):
         return np.divide(1, 1 + kappa * delay)
     tn,tr,vn,vr = row_c.values

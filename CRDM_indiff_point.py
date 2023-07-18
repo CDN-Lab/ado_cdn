@@ -66,7 +66,7 @@ def get_true_param(manual=True):
     # True parameter values to simulate responses, can select from prior distribution
     global PARAM_TRUE 
     if manual:
-        PARAM_TRUE = {'alpha': 0.67, 'beta': 0.66, 'gamma': 1.5}
+        PARAM_TRUE = {'alpha': 0.67, 'beta': -2, 'gamma': 1.5}
 """ 
     else:
         save_dir = '/Volumes/UCDN/datasets/IDM/BH/csv'
@@ -97,17 +97,14 @@ def get_true_param(manual=True):
         sys.exit()
     return response """
 
-def get_simulated_response(design):
+def get_simulated_response(d):
     # Calculate the probability to choose a variable option
-    p_var, a_var, r_var, r_fix = (
-        design['p_var'], design['a_var'], design['r_var'], design['r_fix']
-    )
+    pn, pr, vn, vr, ambig = (d['p_null'],d['p_reward'],d['value_null'],d['value_reward'],d['amb_level'])
     alpha, beta, gamma = PARAM_TRUE['alpha'], PARAM_TRUE['beta'], PARAM_TRUE['gamma']
     
-    u_fix = 0.5 * np.power(r_fix, alpha)
-    u_var = (p_var - beta * a_var / 2) * np.power(r_var, alpha)
-    
-    p_obs = 1 / (1 + np.exp(-gamma * (u_var - u_fix)))
+    SV_null = (vn**alpha) * pn
+    SV_reward = (vr**alpha) * (pr - beta * ambig / 2)
+    p_obs = 1. / (1 + np.exp(-gamma * (SV_reward - SV_null)))
 
     # Randomly sample a binary choice response from Bernoulli distribution
     return bernoulli.rvs(p_obs)
@@ -150,16 +147,32 @@ def insert_var(grid=[],var_nb=0,list_var=[]):
         grid = [g+[i] for g in grid for i in list_var]
     return grid
 
-def make_grid(grid_values,):
+def insert_amb(grid=[],list_var=[]):
+    grid_ambig = []
+    for g in grid:
+        if g[1]==0.50:
+            grid_ambig += [g+[i] for i in list_var]
+    return grid_ambig
+
+def make_grid(grid_values,csp=False):
     grid = []
-    labels = grid_values.keys()
-    for var_nb,row in enumerate(grid_values.items()):
-        grid = insert_var(grid=grid,var_nb=var_nb,list_var=row[1])
+    labels = list(grid_values.keys())
+    if not csp:
+        for var_nb,row in enumerate(grid_values.items()):
+            grid = insert_var(grid=grid,var_nb=var_nb,list_var=row[1])
+    else:
+        for var_nb,row in enumerate(grid_values.items()):
+            if labels[var_nb] == 'amb_level':
+                grid_unambig = insert_var(grid=grid,var_nb=var_nb,list_var=[row[1][0]])
+                grid_ambig = insert_amb(grid=grid,list_var=row[1][1:])
+                grid = grid_unambig + grid_ambig
+            else:
+                grid = insert_var(grid=grid,var_nb=var_nb,list_var=row[1])
     grid_df = pd.DataFrame(grid,columns=labels)
     return grid_df
 
 def make_grids(gd,gp,gr):
-    return make_grid(gd),make_grid(gp),make_grid(gr)
+    return make_grid(gd,csp=True),make_grid(gp),make_grid(gr)
 
 class Gridset(object):
     choice = []
@@ -221,8 +234,8 @@ def step123(log_lik,ent,log_post,sets):
     mutual_info = get_MI(log_lik,ent,log_post)
 
     # Make an empty DataFrame to store data
-    columns = ['trial','response','mean_alpha', 'mean_beta', 'mean_gamma','sd_alpha', 'sd_beta', 'sd_gamma']#,'p_var', 'a_var','r_var', 'r_fix']
-    # columns = ['trial', 'response', 'mean_kappa', 'mean_gamma', 'sd_kappa', 'sd_gamma','time_null', 'time_reward', 'value_null', 'value_reward']
+    columns = ['trial','response','mean_alpha', 'mean_beta', 'mean_gamma','sd_alpha', 'sd_beta', 
+               'sd_gamma','p_null', 'p_reward', 'value_null', 'value_reward', 'amb_level']
     df_simul = pd.DataFrame(None, columns=columns)
 
     for i in range(N_TRIAL):
@@ -230,8 +243,7 @@ def step123(log_lik,ent,log_post,sets):
         # GET_DESIGN based on maximum Mutual information
         idx_design = np.argmax(mutual_info)
         cur_design = sets.choice.iloc[idx_design].to_dict()
-        print(cur_design)
-
+        
         # Experiment
         # cur_response = ask_for_response(cur_design)
         cur_response = get_simulated_response(cur_design)    
@@ -251,7 +263,7 @@ def step123(log_lik,ent,log_post,sets):
             'sd_beta': post_sd[1],
             'sd_gamma': post_sd[2],
         }
-        # dict_app.update(cur_design)
+        dict_app.update(cur_design)
         df_app = pd.DataFrame(dict_app,index=[0])
         df_simul = pd.concat([df_simul,df_app],ignore_index=True)
 
