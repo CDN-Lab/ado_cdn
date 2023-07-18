@@ -143,10 +143,10 @@ def insert_var(grid=[],var_nb=0,list_var=[]):
         grid = [g+[i] for g in grid for i in list_var]
     return grid
 
-def make_grid(design):
+def make_grid(grid_values):
     grid = []
-    labels = design.keys()
-    for var_nb,row in enumerate(design.items()):
+    labels = grid_values.keys()
+    for var_nb,row in enumerate(grid_values.items()):
         grid = insert_var(grid=grid,var_nb=var_nb,list_var=row[1])
     grid_df = pd.DataFrame(grid,columns=labels)
     return grid_df
@@ -245,7 +245,7 @@ def step123(log_lik,ent,log_post,sets):
         df_simul = pd.concat([df_simul,df_app],ignore_index=True)
 
     print(df_simul)
-    fn = '/tmp/ADO_simulation.csv'
+    fn = '/tmp/ADO_cdd_simulation.csv'
     print('Saving to : {}'.format(fn))
     df_simul.to_csv(fn)
     print('Time to complete step 1,2,3 : {} minutes'.format((time.time() - tStep123)/60.0))

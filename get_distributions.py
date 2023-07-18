@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 
 
+# Built-in/Generic Imports
+import sys
+
 # Libs
 import numpy as np
 import pandas as pd
@@ -14,6 +17,10 @@ def populate_log_lik(choice_set,param_set,response_set):
     n_c = choice_set.shape[0]
     n_p = param_set.shape[0]
     n_r = response_set.shape[0]
+
+    print(param_set)
+    print(choice_set)
+    sys.exit()
 
     log_lik = np.zeros((n_c,n_p,n_r))
     for i_c,row_c in choice_set.iterrows():

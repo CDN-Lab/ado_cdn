@@ -33,7 +33,6 @@ import time
 import numpy as np
 import pandas as pd
 from scipy.stats import bernoulli
-import pymc as pm
 
 # Own modules
 from get_distributions import get_LL_ent,get_MI,update_MI,get_post_mean,get_post_sd
@@ -86,7 +85,7 @@ def get_true_param(manual=True):
 
 ### Getting a response entered manually in ask_for_response(design) or simulated in get_simulated_response(design) ###
 
-def ask_for_response(design):
+""" def ask_for_response(design):
     response = input('Please choose: >>>(0) {} in {} days<<< OR >>>(1) {} in {} days<<<'
                      .format(design['value_null'],design['time_null'],design['value_reward'],design['time_reward']))
     response = int(response)
@@ -96,16 +95,19 @@ def ask_for_response(design):
         print('ERROR, you selected {}, response needs to be 0 or 1'.format(response))
         print('Exiting now, try again')
         sys.exit()
-    return response
+    return response """
 
 def get_simulated_response(design):
     # Calculate the probability to choose a variable option
-    tn, tr, vn, vr = (design['time_null'], design['time_reward'],design['value_null'], design['value_reward'])
-    kappa, gamma = PARAM_TRUE['kappa'], PARAM_TRUE['gamma']
+    p_var, a_var, r_var, r_fix = (
+        design['p_var'], design['a_var'], design['r_var'], design['r_fix']
+    )
+    alpha, beta, gamma = PARAM_TRUE['alpha'], PARAM_TRUE['beta'], PARAM_TRUE['gamma']
     
-    SV_null = vn * (1. / (1 + kappa * tn))
-    SV_reward = vr * (1. / (1 + kappa * tr))
-    p_obs = 1. / (1 + np.exp(-gamma * (SV_reward - SV_null)))
+    u_fix = 0.5 * np.power(r_fix, alpha)
+    u_var = (p_var - beta * a_var / 2) * np.power(r_var, alpha)
+    
+    p_obs = 1 / (1 + np.exp(-gamma * (u_var - u_fix)))
 
     # Randomly sample a binary choice response from Bernoulli distribution
     return bernoulli.rvs(p_obs)
@@ -114,22 +116,26 @@ def get_simulated_response(design):
 ### Defining the grids, and functions to make sets as dataframes: choice_set,param_set,response_set
 
 def set_grids():
+
     grid_design = {
-        # now: time_null = 0
-        'time_null': [0],
-        # time to get reward (delay_wait)
-        'time_reward': [5, 10, 30, 60, 90, 150],
-        # immediate reward from experiment: $2, $10, $20 ... fixed to $10
-        'value_null': [10],
+        # safe: p_null = 1.0
+        'p_null': [1.0],
+        # probability reward (lottery winning probability)
+        'p_reward': [0.13, 0.25, 0.38, 0.50, 0.75],
+        # safe reward: $5
+        'value_null': [5],
         # reward amount set to vary according to experiment
-        'value_reward': [7, 14, 21, 30, 41, 50, 65]
+        'value_reward': [5, 8, 20, 40, 50],
+        # ambiguity levels
+        'amb_level':[0.0, 0.24, 0.50, 0.74]
     }
+
     grid_param = {
-        # 50 points on [10^-5, ..., 1] in a log scale
-        'kappa': np.logspace(-5, 0, 50, base=10),
-        # 10 points on (0, 5] in a linear scale
+        'alpha': np.linspace(0, 3, 11)[1:],
+        'beta': np.linspace(-3, 3, 11),
         'gamma': np.linspace(0, 5, 11)[1:]
     }
+
     grid_response = {
         'choice': [0, 1]
     }
@@ -144,10 +150,10 @@ def insert_var(grid=[],var_nb=0,list_var=[]):
         grid = [g+[i] for g in grid for i in list_var]
     return grid
 
-def make_grid(design):
+def make_grid(grid_values,):
     grid = []
-    labels = design.keys()
-    for var_nb,row in enumerate(design.items()):
+    labels = grid_values.keys()
+    for var_nb,row in enumerate(grid_values.items()):
         grid = insert_var(grid=grid,var_nb=var_nb,list_var=row[1])
     grid_df = pd.DataFrame(grid,columns=labels)
     return grid_df
@@ -184,13 +190,13 @@ def get_prior(sets,default=True):
     if default:
         n_p = sets.param.shape[0]
         return np.log(np.ones(n_p, dtype=np.float32) / n_p)
-    else:
+"""     else:
         k_hat = get_khat(sets)
-        return set_to_logp(sets,k_hat)
+        return set_to_logp(sets,k_hat) """
 
 def step0():
     tStep0 = time.time()
-    get_true_param(manual=False)
+    get_true_param(manual=True)
     print(PARAM_TRUE)
     grid_design,grid_param,grid_response = set_grids()
     sets = Gridset()
@@ -198,7 +204,7 @@ def step0():
     # choice_set,param_set,response_set = make_grids(grid_design,grid_param,grid_response)
 
     log_lik,ent = get_LL_ent(sets.choice,sets.param,sets.response)
-    log_prior = get_prior(sets,default=False)
+    log_prior = get_prior(sets,default=True)
 
     # this only for initialization, this needs to be updated when we go through the response, update sequence ... 
     log_post = log_prior
@@ -215,7 +221,8 @@ def step123(log_lik,ent,log_post,sets):
     mutual_info = get_MI(log_lik,ent,log_post)
 
     # Make an empty DataFrame to store data
-    columns = ['trial', 'response', 'mean_kappa', 'mean_gamma', 'sd_kappa', 'sd_gamma','time_null', 'time_reward', 'value_null', 'value_reward']
+    columns = ['trial','response','mean_alpha', 'mean_beta', 'mean_gamma','sd_alpha', 'sd_beta', 'sd_gamma']#,'p_var', 'a_var','r_var', 'r_fix']
+    # columns = ['trial', 'response', 'mean_kappa', 'mean_gamma', 'sd_kappa', 'sd_gamma','time_null', 'time_reward', 'value_null', 'value_reward']
     df_simul = pd.DataFrame(None, columns=columns)
 
     for i in range(N_TRIAL):
@@ -223,6 +230,7 @@ def step123(log_lik,ent,log_post,sets):
         # GET_DESIGN based on maximum Mutual information
         idx_design = np.argmax(mutual_info)
         cur_design = sets.choice.iloc[idx_design].to_dict()
+        print(cur_design)
 
         # Experiment
         # cur_response = ask_for_response(cur_design)
@@ -236,17 +244,19 @@ def step123(log_lik,ent,log_post,sets):
         dict_app = {
             'trial': i + 1,
             'response': cur_response,
-            'mean_kappa': post_mean[0],
-            'mean_gamma': post_mean[1],
-            'sd_kappa': post_sd[0],
-            'sd_gamma': post_sd[1],
+            'mean_alpha': post_mean[0],
+            'mean_beta': post_mean[1],
+            'mean_gamma': post_mean[2],
+            'sd_alpha': post_sd[0],
+            'sd_beta': post_sd[1],
+            'sd_gamma': post_sd[2],
         }
-        dict_app.update(cur_design)
+        # dict_app.update(cur_design)
         df_app = pd.DataFrame(dict_app,index=[0])
         df_simul = pd.concat([df_simul,df_app],ignore_index=True)
 
     print(df_simul)
-    fn = '/tmp/ADO_simulation.csv'
+    fn = '/tmp/ADO_crdm_simulation.csv'
     print('Saving to : {}'.format(fn))
     df_simul.to_csv(fn)
     print('Time to complete step 1,2,3 : {} minutes'.format((time.time() - tStep123)/60.0))
