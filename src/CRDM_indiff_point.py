@@ -66,7 +66,7 @@ def get_true_param(manual=True):
     # True parameter values to simulate responses, can select from prior distribution
     global PARAM_TRUE 
     if manual:
-        PARAM_TRUE = {'alpha': 0.67, 'beta': 2, 'gamma': 1.5}
+        PARAM_TRUE = {'alpha': 0.67, 'beta': -2, 'gamma': 1.5}
 """ 
     else:
         save_dir = '/Volumes/UCDN/datasets/IDM/BH/csv'
