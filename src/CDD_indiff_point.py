@@ -55,27 +55,49 @@ __status__ = 'Dev'
 N_TRIAL = 5
 # True parameter values to simulate responses, can select from prior distribution
 PARAM_TRUE = {'kappa': 0.2, 'gamma': 1.0}
+# machine precision
+NOISE_RATIO = 1e-7
 
 def alpha_beta(m,v):
     # use mean and variance to compute alpha and beta parameters for Beta distribution
     a = ((1.0-m)/(v) - 1/m)*(m**2)
     b = a*(1/m - 1.0)
-    return a,b
+    return max([NOISE_RATIO,a]),max([NOISE_RATIO,b])
 
-def get_true_param(manual=True):
+
+
+def get_true_param(setting='default'):
     # True parameter values to simulate responses, can select from prior distribution
-    global PARAM_TRUE 
-    if manual:
+    print('The true parameters (ground truth) will be set with setting : {}'.format(setting))
+    global PARAM_TRUE
+    if setting=='default':
         PARAM_TRUE = {'kappa': 0.2, 'gamma': 1.0}
-    else:
-        save_dir = '/Volumes/UCDN/datasets/IDM/BH/csv'
-        fn = os.path.join(save_dir,'completely_pooled_model.csv')
+    elif setting=='plos_one':
+        #  Lopez-Guzman 2018: The mean κ was 0.3139 and the median was 0.0499
+        #  H. de Wit 2007: Nlog[k] value (mean ± SD)  = -5.5 ± 1.6, N=606 >>> np.exp(-5.5/606) = 0.99
+        PARAM_TRUE = {'kappa': 0.0499, 'gamma': 1.0}
+    elif setting=='beta_bh':
+        csv_dir = '/Volumes/UCDN/datasets/IDM/BH/csv'
+        fn = os.path.join(csv_dir,'completely_pooled_model.csv')
         pool_model = pd.read_csv(fn,index_col=0)
         mkh,skh = pool_model.loc['kappa[0]','mean'],pool_model.loc['kappa[0]','sd']
         mgh,sgh = pool_model.loc['gamma[0]','mean'],pool_model.loc['gamma[0]','sd']
-
+        
         k_alpha,k_beta = alpha_beta(mkh,skh**2)
         g_alpha,g_beta = alpha_beta(mgh,sgh**2)
+
+        kappa = np.random.beta(k_alpha,k_beta)
+        gamma = np.random.beta(g_alpha,g_beta)
+        PARAM_TRUE = {'kappa': kappa, 'gamma': gamma}
+    elif setting=='beta_mle':
+        utility_dir = '/Volumes/UCDN/datasets/IDM/utility'
+        fn = os.path.join(utility_dir,'split_CDD_analysis.csv')
+        df = pd.read_csv(fn,index_col=0)
+        mkh,vkh = df['kappa'].mean(),df['kappa'].var()
+        mgh,vgh = df['gamma'].mean(),df['gamma'].var()
+        
+        k_alpha,k_beta = alpha_beta(mkh,vkh)
+        g_alpha,g_beta = alpha_beta(mgh,vgh)
 
         kappa = np.random.beta(k_alpha,k_beta)
         gamma = np.random.beta(g_alpha,g_beta)
@@ -268,7 +290,7 @@ def get_experiment_type():
         print('You selected >>>(b) simulate responses<<<\n')
         experiment = 'simulation'
         # PARAM_TRUE are used for simulating a response
-        get_true_param(manual=False)
+        get_true_param(setting='plos_one')
         print(PARAM_TRUE)
     return experiment
 
