@@ -52,9 +52,8 @@ __status__ = 'Dev'
 ### Global variables that can be accessed throughout the script ###
 
 # number of trials
-N_TRIAL = 200
+N_TRIAL = 5
 # True parameter values to simulate responses, can select from prior distribution
-# PARAM_TRUE = get_true_param(default=False)
 PARAM_TRUE = {'kappa': 0.2, 'gamma': 1.0}
 
 def alpha_beta(m,v):
@@ -189,8 +188,6 @@ def get_prior(sets,default=True):
 
 def step0():
     tStep0 = time.time()
-    get_true_param(manual=False)
-    print(PARAM_TRUE)
     grid_design,grid_param,grid_response = set_grids()
     sets = Gridset()
     sets.choice,sets.param,sets.response = make_grids(grid_design,grid_param,grid_response)
@@ -213,6 +210,10 @@ def step123(log_lik,ent,log_post,sets):
     # initialize
     mutual_info = get_MI(log_lik,ent,log_post)
 
+    # ask what experiment we are doing ...
+    # a - participant; b - simulated
+    experiment = get_experiment_type()
+
     # Make an empty DataFrame to store data
     columns = ['trial', 'response', 'mean_kappa', 'mean_gamma', 'sd_kappa', 'sd_gamma','time_null', 'time_reward', 'value_null', 'value_reward']
     df_simul = pd.DataFrame(None, columns=columns)
@@ -224,8 +225,10 @@ def step123(log_lik,ent,log_post,sets):
         cur_design = sets.choice.iloc[idx_design].to_dict()
 
         # Experiment
-        # cur_response = ask_for_response(cur_design)
-        cur_response = get_simulated_response(cur_design)    
+        if experiment == 'participant':
+            cur_response = ask_for_response(cur_design)
+        elif experiment  == 'simulation':
+            cur_response = get_simulated_response(cur_design)    
 
         # UPDATE MI given a response
         mutual_info,log_post = update_MI(sets.choice,sets.response,cur_design,cur_response,log_lik,ent,log_post)
@@ -250,6 +253,24 @@ def step123(log_lik,ent,log_post,sets):
     df_simul.to_csv(fn)
     print('Time to complete step 1,2,3 : {} minutes'.format((time.time() - tStep123)/60.0))
 
+def get_experiment_type():
+    experiment = input('Please select: >>>(a) participant responses<<< or >>>(b) simulate responses<<<\n')
+    if experiment in ['a','b']:
+        pass
+    else:
+        print('ERROR, you selected {}, response needs to be (a) or (b)'.format(experiment))
+        print('Exiting now, try again')
+        sys.exit()
+    if experiment == 'a':
+        print('You selected >>>(a) participant responses<<<\n')
+        experiment = 'participant'
+    elif experiment == 'b':
+        print('You selected >>>(b) simulate responses<<<\n')
+        experiment = 'simulation'
+        # PARAM_TRUE are used for simulating a response
+        get_true_param(manual=False)
+        print(PARAM_TRUE)
+    return experiment
 
 def main():
 
