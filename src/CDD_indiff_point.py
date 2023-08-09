@@ -93,21 +93,19 @@ def get_true_param(setting='default'):
         utility_dir = '/Volumes/UCDN/datasets/IDM/utility'
         fn = os.path.join(utility_dir,'split_CDD_analysis.csv')
         df = pd.read_csv(fn,index_col=0)
-        mkh,vkh = df['kappa'].mean(),df['kappa'].var()
-        mgh,vgh = df['gamma'].mean(),df['gamma'].var()
-        
-        k_alpha,k_beta = alpha_beta(mkh,vkh)
-        g_alpha,g_beta = alpha_beta(mgh,vgh)
 
-        kappa = np.random.beta(k_alpha,k_beta)
-        gamma = np.random.beta(g_alpha,g_beta)
+        mkh,skh = df['kappa'].mean(),df['kappa'].std()
+        mgh,sgh = df['gamma'].mean(),df['gamma'].std()
+
+        kappa = np.random.normal(mkh,skh)
+        gamma = np.random.normal(mgh,sgh)
         PARAM_TRUE = {'kappa': kappa, 'gamma': gamma}
 
 
 ### Getting a response entered manually in ask_for_response(design) or simulated in get_simulated_response(design) ###
 
 def ask_for_response(design):
-    response = input('Please choose: >>>(0) {} in {} days<<< OR >>>(1) {} in {} days<<<'
+    response = input('Please choose: >>>(0) ${} in {} days<<< OR >>>(1) ${} in {} days<<<'
                      .format(design['value_null'],design['time_null'],design['value_reward'],design['time_reward']))
     response = int(response)
     if response in [0,1]:

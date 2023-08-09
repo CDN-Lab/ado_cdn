@@ -52,43 +52,48 @@ __status__ = 'Dev'
 
 # number of trials
 N_TRIAL = 200
-
 # True parameter values to simulate responses
 PARAM_TRUE = {'alpha': 0.67, 'beta': 0.66, 'gamma': 1.5}
+# machine precision
+NOISE_RATIO = 1e-7
 
 def alpha_beta(m,v):
     # use mean and variance to compute alpha and beta parameters for Beta distribution
     a = ((1.0-m)/(v) - 1/m)*(m**2)
     b = a*(1/m - 1.0)
-    return a,b
+    return max([NOISE_RATIO,a]),max([NOISE_RATIO,b])
 
-def get_true_param(manual=True):
+def get_true_param(setting='default'):
     # True parameter values to simulate responses, can select from prior distribution
-    global PARAM_TRUE 
-    if manual:
-        PARAM_TRUE = {'alpha': 0.67, 'beta': -2, 'gamma': 1.5}
-""" 
-    else:
-        save_dir = '/Volumes/UCDN/datasets/IDM/BH/csv'
-        fn = os.path.join(save_dir,'completely_pooled_model.csv')
-        pool_model = pd.read_csv(fn,index_col=0)
-        mkh,skh = pool_model.loc['kappa[0]','mean'],pool_model.loc['kappa[0]','sd']
-        mgh,sgh = pool_model.loc['gamma[0]','mean'],pool_model.loc['gamma[0]','sd']
+    print('The true parameters (ground truth) will be set with setting : {}'.format(setting))
+    global PARAM_TRUE
+    if setting=='default':
+        PARAM_TRUE = {'alpha': 0.67, 'beta': 0.66, 'gamma': 1.5}
+    elif setting=='plos_one':
+        #  Lopez-Guzman 2018: The average RA parameter (α) was 0.7508, and the median was 0.6087
+        #  Levy 2010: mean beta: session 1, 0.7 \pm 0.2; session 2, 0.6 \pm0.3; 
+        PARAM_TRUE = {'alpha': 0.61, 'beta': 0.65, 'gamma': 1.0}
+    elif setting=='beta_mle':
+        utility_dir = '/Volumes/UCDN/datasets/IDM/utility'
+        fn = os.path.join(utility_dir,'split_CRDM_analysis.csv')
+        df = pd.read_csv(fn,index_col=0)
+        
+        mah,sah = df['alpha'].mean(),df['alpha'].std()
+        mbh,sbh = df['beta'].mean(),df['beta'].std()
+        mgh,sgh = df['gamma'].mean(),df['gamma'].std()
 
-        k_alpha,k_beta = alpha_beta(mkh,skh**2)
-        g_alpha,g_beta = alpha_beta(mgh,sgh**2)
+        alpha = np.random.normal(mah,sah)
+        beta = np.random.normal(mbh,sbh)
+        gamma = np.random.normal(mgh,sgh)
 
-        kappa = np.random.beta(k_alpha,k_beta)
-        gamma = np.random.beta(g_alpha,g_beta)
-        PARAM_TRUE = {'kappa': kappa, 'gamma': gamma}
- """
+        PARAM_TRUE = {'alpha': max(alpha,0), 'beta':beta,'gamma': max(0,gamma)}
 
 ### Getting a response entered manually in ask_for_response(design) or simulated in get_simulated_response(design) ###
 
 def ask_for_response(design):
-    response = input('Please choose: >>>(0) ${0} at {1:0.1f}% <<< OR >>>(1) ${2} at {3:0.1f}% and {4:0.1f}$ ambiguity<<<'
+    response = input('Please choose: >>>(0) ${0} at {1:0.1f}% <<< OR >>>(1) ${2} at {3:0.1f}% and {4:0.1f}% ambiguity<<<'
                      .format(design['value_null'],100*design['p_null'],design['value_reward'],100*design['p_reward'],
-                             100*design['amb_level']))
+                             100*design['amb_level0']))
     response = int(response)
     if response in [0,1]:
         pass
@@ -210,8 +215,6 @@ def get_prior(sets,default=True):
 
 def step0():
     tStep0 = time.time()
-    get_true_param(manual=True)
-    print(PARAM_TRUE)
     grid_design,grid_param,grid_response = set_grids()
     sets = Gridset()
     sets.choice,sets.param,sets.response = make_grids(grid_design,grid_param,grid_response)
@@ -234,6 +237,10 @@ def step123(log_lik,ent,log_post,sets):
     # initialize
     mutual_info = get_MI(log_lik,ent,log_post)
 
+    # ask what experiment we are doing ...
+    # a - participant; b - simulated
+    experiment = get_experiment_type()
+
     # Make an empty DataFrame to store data
     columns = ['trial','response','mean_alpha', 'mean_beta', 'mean_gamma','sd_alpha', 'sd_beta', 
                'sd_gamma','p_null', 'p_reward', 'value_null', 'value_reward', 'amb_level']
@@ -246,8 +253,10 @@ def step123(log_lik,ent,log_post,sets):
         cur_design = sets.choice.iloc[idx_design].to_dict()
         
         # Experiment
-        cur_response = ask_for_response(cur_design)
-        # cur_response = get_simulated_response(cur_design)    
+        if experiment == 'participant':
+            cur_response = ask_for_response(cur_design)
+        elif experiment  == 'simulation':
+            cur_response = get_simulated_response(cur_design)     
 
         # UPDATE MI given a response
         mutual_info,log_post = update_MI(sets.choice,sets.response,cur_design,cur_response,log_lik,ent,log_post)
@@ -274,6 +283,24 @@ def step123(log_lik,ent,log_post,sets):
     df_simul.to_csv(fn)
     print('Time to complete step 1,2,3 : {} minutes'.format((time.time() - tStep123)/60.0))
 
+def get_experiment_type():
+    experiment = input('Please select: >>>(a) participant responses<<< or >>>(b) simulate responses<<<\n')
+    if experiment in ['a','b']:
+        pass
+    else:
+        print('ERROR, you selected {}, response needs to be (a) or (b)'.format(experiment))
+        print('Exiting now, try again')
+        sys.exit()
+    if experiment == 'a':
+        print('You selected >>>(a) participant responses<<<\n')
+        experiment = 'participant'
+    elif experiment == 'b':
+        print('You selected >>>(b) simulate responses<<<\n')
+        experiment = 'simulation'
+        # PARAM_TRUE are used for simulating a response
+        get_true_param(setting='beta_mle')
+        print(PARAM_TRUE)
+    return experiment
 
 def main():
     # Step 0, compute log_likelihood, entropy, assign log_prior to log_posterior
