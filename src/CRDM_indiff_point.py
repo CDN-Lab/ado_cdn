@@ -85,9 +85,10 @@ def get_true_param(manual=True):
 
 ### Getting a response entered manually in ask_for_response(design) or simulated in get_simulated_response(design) ###
 
-""" def ask_for_response(design):
-    response = input('Please choose: >>>(0) {} in {} days<<< OR >>>(1) {} in {} days<<<'
-                     .format(design['value_null'],design['time_null'],design['value_reward'],design['time_reward']))
+def ask_for_response(design):
+    response = input('Please choose: >>>(0) ${0} at {1:0.1f}% <<< OR >>>(1) ${2} at {3:0.1f}% and {4:0.1f}$ ambiguity<<<'
+                     .format(design['value_null'],100*design['p_null'],design['value_reward'],100*design['p_reward'],
+                             100*design['amb_level']))
     response = int(response)
     if response in [0,1]:
         pass
@@ -95,7 +96,7 @@ def get_true_param(manual=True):
         print('ERROR, you selected {}, response needs to be 0 or 1'.format(response))
         print('Exiting now, try again')
         sys.exit()
-    return response """
+    return response
 
 def get_simulated_response(d):
     # Calculate the probability to choose a variable option
@@ -245,8 +246,8 @@ def step123(log_lik,ent,log_post,sets):
         cur_design = sets.choice.iloc[idx_design].to_dict()
         
         # Experiment
-        # cur_response = ask_for_response(cur_design)
-        cur_response = get_simulated_response(cur_design)    
+        cur_response = ask_for_response(cur_design)
+        # cur_response = get_simulated_response(cur_design)    
 
         # UPDATE MI given a response
         mutual_info,log_post = update_MI(sets.choice,sets.response,cur_design,cur_response,log_lik,ent,log_post)
