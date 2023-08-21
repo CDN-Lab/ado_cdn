@@ -75,7 +75,7 @@ print('log_prior is :\n {}'.format(log_prior))
 
 ### Step 1. Design Optimization
 
-After pre-computing the above distributions, we begin the optimization phase. In this first step, we compute several different distributions to allow us to compute the mutal information which is maximized to find the new design.
+After pre-computing the above distributions, we begin the optimization phase. In this first step, we compute several different distributions to allow us to compute the mutual information which is maximized to find the new design.
 
 **1. Compute the marginal likelihood $p(y|d) = \sum_{\theta} p(y|\theta,d)p_t(\theta)$ for all values of $y$ and $d$:**
 
