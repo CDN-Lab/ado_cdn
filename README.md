@@ -85,7 +85,7 @@ In practice we compute the marginal log likelihood by taking the $\log$ -> $\log
     marg_log_lik = logsumexp(log_lik + log_post.reshape(1, -1, 1), axis=1)
 ```
 
-From numpy.reshape: *One shape dimension can be -1. In this case, the value is inferred from the length of the array and remaining dimensions.* The reshape makes `log_post` reshape from `(n_p,)` to `(1,n_p,1)` so it matches the dimensionbs of the `log_lik`
+From numpy.reshape: *One shape dimension can be -1. In this case, the value is inferred from the length of the array and remaining dimensions.* The reshape makes `log_post` reshape from `(n_p,)` to `(1,n_p,1)` so it matches the dimensions of the `log_lik`
 
 **NOTE:** We could have computed the marginal likelihood as : `marg_lik = np.einsum('dpy,dpy->dy', np.exp(log_lik), np.exp(log_post.reshape(1, -1, 1)))`
 
