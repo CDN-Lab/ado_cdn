@@ -135,7 +135,9 @@ def set_grids():
 
     grid_param = {
         'alpha': np.linspace(0, 3, 11)[1:],
-        'beta': np.linspace(-3, 3, 11),
+        # 'beta': np.linspace(-3, 3, 11),
+        # setting beta_max = 1.3 to avoid getting negative SV when generating new choice set
+        'beta': np.linspace(-3, 1.3, 11),
         'gamma': np.linspace(0, 5, 11)[1:]
     }
 
