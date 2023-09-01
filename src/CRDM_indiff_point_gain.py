@@ -283,7 +283,7 @@ def step123(log_lik,ent,log_post,sets):
         df_simul = pd.concat([df_simul,df_app],ignore_index=True)
 
     print(df_simul)
-    fn = '/Volumes/UCDN/datasets/ICR/ado/sample_output.csv'
+    fn = '/Volumes/UCDN/datasets/ICR/ado/sample_output_gain.csv'
     print('Saving to : {}'.format(fn))
     df_simul.to_csv(fn)
     print('Time to complete step 1,2,3 : {} minutes'.format((time.time() - tStep123)/60.0))
@@ -310,8 +310,8 @@ def get_experiment_type():
     return experiment
 
 def main():
-    print('Executing: {}'.format(__file__))
-    print('Contents of the file during the execution\n',open(__file__,'r').read())
+    # print('Executing: {}'.format(__file__))
+    # print('Contents of the file during the execution\n',open(__file__,'r').read())
     # Step 0, compute log_likelihood, entropy, assign log_prior to log_posterior
     log_lik,ent,log_post,sets = step0()
     step123(log_lik,ent,log_post,sets)
