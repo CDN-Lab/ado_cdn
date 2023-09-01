@@ -40,8 +40,12 @@ def compute_LL_crdm(row_c,row_p,row_r):
     alpha,beta,gamma = row_p.values
     choice = row_r.values[0]
 
-    iSV_null = (vn**alpha) * ambiguity(prob=pn,ambig=0.0,beta=beta)
-    iSV_reward = (vr**alpha) * ambiguity(prob=pr,ambig=ambig,beta=beta)
+    if vr>0:
+        iSV_null = (vn**alpha) * ambiguity(prob=pn,ambig=0.0,beta=beta)
+        iSV_reward = (vr**alpha) * ambiguity(prob=pr,ambig=ambig,beta=beta)
+    else:
+        iSV_null = (-1.0)*(abs(vn)**alpha) * ambiguity(prob=pn,ambig=0.0,beta=beta)
+        iSV_reward = (-1.0)*(abs(vr)**alpha) * ambiguity(prob=pr,ambig=ambig,beta=beta)
     p_choose_reward = inv_logit(gamma*(iSV_reward-iSV_null))
     return bernoulli.logpmf(choice, p_choose_reward)
 
