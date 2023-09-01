@@ -111,8 +111,8 @@ def get_simulated_response(d):
     pn, pr, vn, vr, ambig = (d['p_null'],d['p_reward'],d['value_null'],d['value_reward'],d['amb_level'])
     alpha, beta, gamma = PARAM_TRUE['alpha'], PARAM_TRUE['beta'], PARAM_TRUE['gamma']
     
-    SV_null = (vn**alpha) * pn
-    SV_reward = (vr**alpha) * (pr - beta * ambig / 2)
+    SV_null = (-1.0)*(abs(vn)**alpha) * pn
+    SV_reward = (-1.0)*(abs(vr)**alpha) * (pr - beta * ambig / 2)
     p_obs = 1. / (1 + np.exp(-gamma * (SV_reward - SV_null)))
 
     # Randomly sample a binary choice response from Bernoulli distribution
@@ -129,9 +129,9 @@ def set_grids():
         # probability reward (lottery winning probability)
         'p_reward': [0.13, 0.25, 0.38, 0.50, 0.75],
         # safe reward: $5
-        'value_null': [5],
+        'value_null': [-5],
         # reward amount set to vary according to experiment
-        'value_reward': [5, 8, 20, 40, 50],
+        'value_reward': [-5, -8, -20, -40, -50],
         # ambiguity levels
         'amb_level':[0.0, 0.24, 0.50, 0.74]
     }
@@ -283,7 +283,7 @@ def step123(log_lik,ent,log_post,sets):
         df_simul = pd.concat([df_simul,df_app],ignore_index=True)
 
     print(df_simul)
-    fn = '/Volumes/UCDN/datasets/ICR/ado/sample_output.csv'
+    fn = '/Volumes/UCDN/datasets/ICR/ado/sample_output_loss.csv'
     print('Saving to : {}'.format(fn))
     df_simul.to_csv(fn)
     print('Time to complete step 1,2,3 : {} minutes'.format((time.time() - tStep123)/60.0))
@@ -310,8 +310,8 @@ def get_experiment_type():
     return experiment
 
 def main():
-    print('Executing: {}'.format(__file__))
-    print('Contents of the file during the execution\n',open(__file__,'r').read())
+    # print('Executing: {}'.format(__file__))
+    # print('Contents of the file during the execution\n',open(__file__,'r').read())
     # Step 0, compute log_likelihood, entropy, assign log_prior to log_posterior
     log_lik,ent,log_post,sets = step0()
     step123(log_lik,ent,log_post,sets)
