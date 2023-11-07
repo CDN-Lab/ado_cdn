@@ -51,9 +51,9 @@ __status__ = 'Dev'
 ### Global variables that can be accessed throughout the script ###
 
 # number of trials
-N_TRIAL = 200
+N_TRIAL = 20
 # True parameter values to simulate responses
-PARAM_TRUE = {'alpha': 1.5, 'beta': 1.5, 'gamma': 0.1}
+PARAM_TRUE = {'alpha': 0.109, 'beta': 0.838, 'gamma': 0.1}
 # machine precision
 NOISE_RATIO = 1e-7
 
@@ -68,7 +68,7 @@ def get_true_param(setting='default'):
     print('The true parameters (ground truth) will be set with setting : {}'.format(setting))
     global PARAM_TRUE
     if setting=='default':
-        PARAM_TRUE = {'alpha': 0.67, 'beta': 0.66, 'gamma': 1.5}
+        PARAM_TRUE = {'alpha': 0.109, 'beta': 0.838, 'gamma': 4.079}
     elif setting=='ICR':
         # estimated from patient in ICR study
         PARAM_TRUE = {'alpha': 1.5, 'beta': 1.5, 'gamma': 0.1}
@@ -305,7 +305,7 @@ def get_experiment_type():
         print('You selected >>>(b) simulate responses<<<\n')
         experiment = 'simulation'
         # PARAM_TRUE are used for simulating a response
-        get_true_param(setting='ICR')
+        get_true_param(setting='default')
         print(PARAM_TRUE)
     return experiment
 
